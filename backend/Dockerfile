@@ -34,3 +34,4 @@ ENV DATABASE_PATH=/app/data/lingua.db
 VOLUME /app/data
 
 CMD ["./server"]
+
