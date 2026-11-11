@@ -7,7 +7,9 @@
 	import AnalysisPanel from '$lib/components/AnalysisPanel.svelte';
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
 	import BookmarksDrawer from '$lib/components/BookmarksDrawer.svelte';
+	import AdminModal from '$lib/components/AdminModal.svelte';
 	import { speechEngine } from '$lib/audio.svelte';
+	import { adminState } from '$lib/state/admin.svelte';
 	import { Sparkles, RefreshCw, Type, Mic, Play, CheckCircle2 } from 'lucide-svelte';
 
 	// Svelte 5 Runes States
@@ -234,6 +236,34 @@
 			console.error('Failed to delete bookmark', e);
 		}
 	}
+
+	function handlePresetCreated(newPreset: PresetText) {
+		if (newPreset.lang_code === selectedLang) {
+			presets = [newPreset, ...presets];
+		}
+		showToast(`例文「${newPreset.title}」を追加しました！`);
+	}
+
+	async function handleDeletePreset(id: string) {
+		try {
+			const res = await fetch(`/api/presets/${id}`, {
+				method: 'DELETE',
+				headers: {
+					'X-Admin-Secret': adminState.adminSecret
+				}
+			});
+
+			if (res.ok) {
+				presets = presets.filter(p => p.id !== id);
+				showToast('例文を削除しました');
+			} else {
+				showToast('削除に失敗しました: ' + (await res.text()));
+			}
+		} catch (e) {
+			console.error('Failed to delete preset', e);
+			showToast('通信エラーが発生しました');
+		}
+	}
 </script>
 
 <!-- Header -->
@@ -264,7 +294,7 @@
 	</section>
 
 	<!-- Presets Quick Bar -->
-	<PresetSelector {presets} onSelectPreset={handleSelectPreset} />
+	<PresetSelector {presets} onSelectPreset={handleSelectPreset} onDeletePreset={handleDeletePreset} />
 
 	<!-- Text Input & Tokenize Bar -->
 	<section class="space-y-3 bg-slate-900/60 p-5 rounded-2xl border border-slate-800 shadow-xl">
@@ -351,6 +381,13 @@
 	{selectedLang}
 	onClose={() => (isBookmarksOpen = false)}
 	onDelete={handleDeleteBookmark}
+/>
+
+<!-- Admin Modal -->
+<AdminModal
+	{languages}
+	{selectedLang}
+	onPresetCreated={handlePresetCreated}
 />
 
 <!-- Toast Notification -->

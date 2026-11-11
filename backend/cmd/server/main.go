@@ -62,7 +62,19 @@ func main() {
 	})
 
 	mux.HandleFunc("/api/languages", langHandler.GetLanguages)
-	mux.HandleFunc("/api/presets", langHandler.GetPresets)
+	mux.HandleFunc("/api/presets", langHandler.HandlePresets)
+	mux.HandleFunc("/api/presets/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			langHandler.DeletePreset(w, r)
+			return
+		}
+		if strings.TrimPrefix(r.URL.Path, "/api/presets/") == "" {
+			langHandler.HandlePresets(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("/api/admin/verify", langHandler.VerifyAdmin)
 	mux.HandleFunc("/api/tokenize", tokenHandler.Tokenize)
 	mux.HandleFunc("/api/analyze/stream", analyzeHandler.AnalyzeStream)
 

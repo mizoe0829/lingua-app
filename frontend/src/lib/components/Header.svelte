@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Language } from '$lib/types';
-	import { Bookmark, Volume2, Sparkles, Globe2 } from 'lucide-svelte';
+	import { adminState } from '$lib/state/admin.svelte';
+	import { Bookmark, Volume2, Sparkles, Globe2, ShieldCheck, Shield } from 'lucide-svelte';
 
 	interface Props {
 		languages: Language[];
@@ -58,6 +59,24 @@
 					</select>
 				</div>
 			</div>
+
+			<!-- Admin Button -->
+			<button
+				onclick={() => (adminState.isModalOpen = true)}
+				class="p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold
+					{adminState.isAdmin
+						? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+						: 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}"
+				title={adminState.isAdmin ? '管理者コンソールを開く' : '管理者ログイン'}
+			>
+				{#if adminState.isAdmin}
+					<ShieldCheck class="w-4 h-4 text-emerald-400" />
+					<span class="hidden lg:inline">Admin</span>
+				{:else}
+					<Shield class="w-4 h-4" />
+					<span class="hidden lg:inline">管理</span>
+				{/if}
+			</button>
 
 			<!-- Bookmarks Toggle -->
 			<button
