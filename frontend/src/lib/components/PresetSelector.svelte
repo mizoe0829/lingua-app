@@ -41,9 +41,9 @@
 				<button
 					type="button"
 					onclick={() => (adminState.isModalOpen = true)}
-					class="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+					class="px-2 py-0.5 rounded-lg border border-slate-800 bg-slate-900/80 text-xs font-medium text-slate-400 hover:text-white hover:border-slate-700 transition-colors flex items-center gap-1"
 				>
-					<Shield class="w-3 h-3" /> 管理者ログイン
+					<Shield class="w-3.5 h-3.5 text-slate-400" /> 管理者ログイン
 				</button>
 			{/if}
 		</div>

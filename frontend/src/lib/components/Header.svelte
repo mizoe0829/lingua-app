@@ -63,18 +63,18 @@
 			<!-- Admin Button -->
 			<button
 				onclick={() => (adminState.isModalOpen = true)}
-				class="p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold
+				class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold
 					{adminState.isAdmin
-						? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-						: 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'}"
+						? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 shadow-sm shadow-emerald-500/10'
+						: 'bg-slate-900 border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-600'}"
 				title={adminState.isAdmin ? '管理者コンソールを開く' : '管理者ログイン'}
 			>
 				{#if adminState.isAdmin}
 					<ShieldCheck class="w-4 h-4 text-emerald-400" />
-					<span class="hidden lg:inline">Admin</span>
+					<span class="inline">Admin</span>
 				{:else}
-					<Shield class="w-4 h-4" />
-					<span class="hidden lg:inline">管理</span>
+					<Shield class="w-4 h-4 text-slate-400" />
+					<span class="inline">管理</span>
 				{/if}
 			</button>
 
