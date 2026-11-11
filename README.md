@@ -17,53 +17,52 @@
 
 ---
 
-## 💡 設計思想: "Write, Right, Light"
+## 💡 設計思想: Write / Right / Light
 
-本プロダクトは、作者の一貫した開発信条である **"Write, Right, Light"** に基づいて設計・実装されています。
+本プロダクトは、データ整合性・実行時パフォーマンス・品質担保のトレードオフを最適化する **"Write / Right / Light"** のアプローチに基づいて設計・実装されています。
 
 ```mermaid
 flowchart TD
     subgraph Browser ["Frontend: SvelteKit 2 + Svelte 5 (Port 5173)"]
         UIInput["学習テキスト入力 / プリセット選択"]
-        TokenBoard["インタラクティブ・トークンボード<br/>(単語分割・ホバー辞書・0ms発音)"]
-        AudioEngine["Web Speech API コントローラー<br/>(Runes: $state / $effect 音声同期ハイライト)"]
-        AIPanel["AI イントネーション & 構文解説<br/>(SSE ストリーミング描画)"]
+        TokenBoard["インタラクティブ・トークンボード<br/>単語分割・ホバー辞書・0ms発音"]
+        AudioEngine["Web Speech API コントローラー<br/>Runes: $state / $effect 音声同期ハイライト"]
+        AIPanel["AI イントネーション & 構文解説<br/>SSE ストリーミング描画"]
     end
 
     subgraph GoBackend ["Backend: Go 1.24 (Port 8085, ~17MB Binary)"]
         Mux["標準 net/http ルーター & CORS"]
         Tokenizer["多言語トークナイザー & リエゾン判定"]
-        GeminiSvc["Gemini API (3.8 / 2.5 Flash)<br/>+ ローカルルールベース・フォールバック"]
+        GeminiSvc["Gemini API 3.8 / 2.5 Flash<br/>+ ローカルルールベース・フォールバック"]
         DB["SQLite 3 (WALモード, modernc Pure Go)"]
     end
 
     UIInput -->|POST /api/tokenize| Tokenizer
     Tokenizer -->|IPA & 品詞マッピング| TokenBoard
-    TokenBoard -->|単語タップ: 0ms| AudioEngine
+    TokenBoard -->|単語タップ 0ms| AudioEngine
     AudioEngine -->|boundary イベント| TokenBoard
     TokenBoard -->|文単位のAI解説要求| GeminiSvc
-    GeminiSvc -->|text/event-stream (SSE)| AIPanel
+    GeminiSvc -->|SSE ストリーミング| AIPanel
     TokenBoard -->|単語帳保存 /api/bookmarks| DB
 ```
 
-### 1. Light（超低遅延・極小フットプリント）
-- **Svelte 5 (Runes)**: 
-  - 仮想DOMのdiff検出オーバーヘッドを完全に排除。シグナルベースのリアクティビティ（`$state`, `$derived`, `$effect`）により、数百単語の長文でもホバーや音声再生中のカラオケ風ハイライトが 60fps（0ms遅延）で追従。
-- **Go 1.24 シングルバイナリ**: 
-  - CGO不要の Pure Go SQLite (`modernc.org/sqlite`) を採用し、バイナリサイズわずか **17MB**。
-  - メモリ消費量は 20MB 台、コールドスタート数ミリ秒で即座にリクエストを捌きます。
+### 1. Right（データ整合性と高可用性）
+- **多言語ドメインの構造化**:
+  言語コード（ISO 639-1）、国際音声記号（IPA）、品詞（POS）、音の繋がり（Liaison）を厳格にモデル化し、曖昧な自然言語データを型安全にバックエンドで検証・マッピング。
+- **2重のフォールバック・可用性設計**:
+  外部LLM APIへの過度な依存を避け、Gemini APIキー未設定・レート制限・ネットワーク切断時でも、Go内部の**ルールベース解析エンジン**が即座に代替ストリーミングを実行。音声再生もブラウザ標準の **Web Speech API** を採用することで、完全オフライン環境でも発音確認を継続できる冗長性を確保。
 
-### 2. Right（ドメインの本質・データ整合性・高可用性）
-- **多言語拡張ドメインモデル**: 
-  - 言語コード（ISO 639-1）、IPA国際音声記号、品詞（POS）、音の繋がり（Liaison）を厳格にモデル化。
-- **2重のフォールバック・冗長化設計**: 
-  - Gemini API キーが未設定、クォータ制限、または通信障害が発生した場合でも、Go内部の**ルールベース解析エンジン**が即座に代替ストリーミングを実行。
-  - 音声再生も外部API依存を排除し、ブラウザ標準の **Web Speech API** を活用することで完全オフラインでも発音学習を継続可能。
+### 2. Light（超低遅延・入力負荷ゼロのUX）
+- **Svelte 5 Runes（ゼロ仮想DOM）**:
+  仮想DOMのdiff検出オーバーヘッドを排除し、シグナルベースのリアクティビティ（`$state`, `$derived`, `$effect`）を採用。長文テキストであっても、単語ホバー時の辞書表示や音声再生に合わせたミリ秒精度のカラオケ風ハイライトを 60fps（遅延 0ms）で追従。
+- **Go 1.24 による軽量シングルバイナリ**:
+  CGO非依存の Pure Go SQLite (`modernc.org/sqlite`) を採用し、実行バイナリわずか **17MB**・起動メモリ **20MB台** を実現。コールドスタートなしで即座にAPI・SSEリクエストを処理。
 
-### 3. Write（型安全性・品質担保・明文化）
-- フロントエンド（TypeScript + Svelte 5 型定義）とバックエンド（Go 構造体）のスキーマを完全一致。
-- `go test` によるトークナイザー分割精度・リエゾン検出・DB初期化の自動テスト網。
-- `svelte-check` による静的型検査（エラー・警告ゼロ）。
+### 3. Write（型安全性・自動テスト・保守性）
+- **エンドツーエンドのスキーマ統一**:
+  Goの構造体定義とSvelteKitのTypeScript型定義を厳格に一致させ、フロント/バック間の境界でのランタイムエラーを防止。
+- **自動テスト網と静的検査**:
+  Go標準のテストフレームワークによるトークン分割・音節リエゾン検出・DB整合性の単体テスト（`go test` PASS）および、TypeScript/Svelte 5 の厳格な静的型検査（`svelte-check` エラー・警告ゼロ）を徹底。
 
 ---
 
