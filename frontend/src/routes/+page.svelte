@@ -250,7 +250,7 @@
 	<!-- Hero Intro -->
 	<section class="text-center max-w-3xl mx-auto space-y-3">
 		<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-			<Sparkles class="w-3.5 h-3.5" /> 自治体向け英語学習支援の実務知見 × 現代の Web 技術
+			<Sparkles class="w-3.5 h-3.5" /> Zero Latency Speech & Phonetics Workbench
 		</div>
 		<h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
 			話す・聞く力を 0 秒で鍛える、<br />
