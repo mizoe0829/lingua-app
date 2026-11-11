@@ -17,6 +17,7 @@ func SeedData(db *sql.DB) error {
 		{"es-ES", "Spanish (Spain)", "Español", "🇪🇸", "es-ES", 1.0, 0.95},
 		{"fr-FR", "French (France)", "Français", "🇫🇷", "fr-FR", 1.0, 0.95},
 		{"de-DE", "German", "Deutsch", "🇩🇪", "de-DE", 1.0, 0.95},
+		{"it-IT", "Italian", "Italiano", "🇮🇹", "it-IT", 1.0, 0.95},
 		{"ja-JP", "Japanese", "日本語", "🇯🇵", "ja-JP", 1.0, 1.0},
 	}
 
@@ -79,6 +80,24 @@ func SeedData(db *sql.DB) error {
 			content:     "Bonjour ! Je cherche la station de métro la plus proche d'ici. Est-ce que c'est loin à pied, ou vaut-il mieux prendre un bus ?",
 			difficulty:  "Intermediate",
 		},
+		{
+			id:          "de-daily-1",
+			langCode:    "de-DE",
+			category:    "Daily Conversation",
+			title:       "In einem Café in Berlin",
+			description: "Praktische Konversation mit klaren Konsonanten und zusammengesetzten Substantiven.",
+			content:     "Guten Tag! Ich hätte gerne einen Cappuccino mit Hafermilch und ein Stück Apfelstrudel, bitte. Kann man hier mit Karte bezahlen?",
+			difficulty:  "Beginner",
+		},
+		{
+			id:          "it-daily-1",
+			langCode:    "it-IT",
+			category:    "Daily Conversation",
+			title:       "Al bar a Roma",
+			description: "Conversazione tipica al bar italiano: ritmo melodico e pronuncia chiara delle doppie consonanti.",
+			content:     "Buongiorno! Vorrei un caffè espresso al banco e un cornetto al pistacchio, per favore. Quant'è in tutto?",
+			difficulty:  "Beginner",
+		},
 	}
 
 	for _, p := range presets {
@@ -118,6 +137,19 @@ func SeedData(db *sql.DB) error {
 		{"fr-FR", "promenade", "/pʁɔm.nad/", "nom", "散歩、散策", "Une promenade le long de la Seine.", "セーヌ川沿いの散歩。"},
 		{"fr-FR", "station", "/sta.sjɔ̃/", "nom", "駅、停留所", "La prochaine station de métro.", "次の地下鉄の駅。"},
 		{"fr-FR", "liaison", "/ljɛ.zɔ̃/", "nom", "（音声学）リエゾン、音の連結", "La liaison en français est essentielle.", "フランス語におけるリエゾンは不可欠です。"},
+
+		// German words
+		{"de-DE", "hafermilch", "/ˈhaːfɐˌmɪlç/", "Substantiv", "オーツミルク", "Kaffee mit Hafermilch.", "オーツミルク入りコーヒー。"},
+		{"de-DE", "apfelstrudel", "/ˈapfl̩ˌʃtʁuːdl̩/", "Substantiv", "アップルシュトゥルーデル（オーストリア・ドイツ伝統のリンゴパイ）", "Ein warmes Stück Apfelstrudel.", "温かい一切れのアップルパイ。"},
+		{"de-DE", "aussprache", "/ˈaʊ̯sˌʃpʁaːxə/", "Substantiv", "発音", "Eine klare deutsche Aussprache.", "明瞭なドイツ語の発音。"},
+		{"de-DE", "rechnung", "/ˈʁɛçnʊŋ/", "Substantiv", "お会計、請求書", "Die Rechnung bitte!", "お会計をお願いします！"},
+
+		// Italian words
+		{"it-IT", "espresso", "/eˈsprɛs.so/", "sostantivo", "エスプレッソコーヒー", "Un caffè espresso, grazie.", "エスプレッソを1杯お願いします。"},
+		{"it-IT", "cornetto", "/korˈnet.to/", "sostantivo", "コルネット（イタリア風クロワッサン）", "Un cornetto caldo al mattino.", "朝の温かいコルネット。"},
+		{"it-IT", "pistacchio", "/piˈstak.kjo/", "sostantivo", "ピスタチオ", "Gelato al pistacchio di Bronte.", "ブロンテ産ピスタチオのジェラート。"},
+		{"it-IT", "piacere", "/pjaˈtʃe.re/", "sostantivo", "はじめまして、喜び", "Molto piacere di conoscerla!", "お会いできて光栄です！"},
+		{"it-IT", "pronuncia", "/proˈnun.tʃa/", "sostantivo", "発音", "La corretta pronuncia italiana.", "正しいイタリア語の発音。"},
 	}
 
 	for _, v := range vocabularies {
