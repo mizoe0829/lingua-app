@@ -24,6 +24,7 @@ services:
       - "5173:5173"
     environment:
       - NODE_ENV=development
+      - BACKEND_URL=http://backend:8085
     volumes:
       - ./frontend:/app
       - /app/node_modules
