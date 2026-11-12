@@ -52,3 +52,19 @@ export interface Bookmark {
 	created_at?: string;
 }
 
+export type ProficiencyLevel = 'Beginner' | 'Intermediate' | 'Advanced';
+
+export interface DialogMessage {
+	id: string;
+	role: 'user' | 'assistant';
+	content: string;
+	translation: string;
+	better_phrasing?: string;
+	pronunciation_tip?: string;
+}
+
+export interface DialogStreamChunk {
+	type: 'reply' | 'translation' | 'better_phrasing' | 'tip' | 'done' | 'error';
+	chunk?: string;
+}
+

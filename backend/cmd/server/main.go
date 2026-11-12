@@ -51,6 +51,7 @@ func main() {
 	langHandler := handler.NewLanguageHandler(db)
 	tokenHandler := handler.NewTokenizeHandler(tokenizerService)
 	analyzeHandler := handler.NewAnalyzeHandler(geminiService)
+	dialogHandler := handler.NewDialogHandler(geminiService)
 	bookmarkHandler := handler.NewBookmarkHandler(db)
 
 	// 4. Router Setup
@@ -77,6 +78,7 @@ func main() {
 	mux.HandleFunc("/api/admin/verify", langHandler.VerifyAdmin)
 	mux.HandleFunc("/api/tokenize", tokenHandler.Tokenize)
 	mux.HandleFunc("/api/analyze/stream", analyzeHandler.AnalyzeStream)
+	mux.HandleFunc("/api/dialog/stream", dialogHandler.DialogStream)
 
 	// Bookmark routing
 	mux.HandleFunc("/api/bookmarks", bookmarkHandler.HandleBookmarks)

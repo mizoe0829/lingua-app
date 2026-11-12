@@ -8,9 +8,10 @@
 	import PresetSelector from '$lib/components/PresetSelector.svelte';
 	import BookmarksDrawer from '$lib/components/BookmarksDrawer.svelte';
 	import AdminModal from '$lib/components/AdminModal.svelte';
+	import SpeakingDialogModal from '$lib/components/SpeakingDialogModal.svelte';
 	import { speechEngine } from '$lib/audio.svelte';
 	import { adminState } from '$lib/state/admin.svelte';
-	import { Sparkles, RefreshCw, Type, Mic, Play, CheckCircle2 } from 'lucide-svelte';
+	import { Sparkles, RefreshCw, Type, Mic, Play, CheckCircle2, MessageSquare } from 'lucide-svelte';
 
 	// Svelte 5 Runes States
 	let languages = $state<Language[]>([]);
@@ -18,6 +19,7 @@
 	let presets = $state<PresetText[]>([]);
 	let bookmarks = $state<Bookmark[]>([]);
 	let isBookmarksOpen = $state(false);
+	let isDialogOpen = $state(false);
 
 	let rawInputText = $state(
 		"Hi there! Could I get an oat milk flat white with an extra shot? Also, do you happen to have any fresh almond croissants left today?"
@@ -272,13 +274,14 @@
 	{selectedLang}
 	onSelectLang={handleSelectLang}
 	onToggleBookmarks={() => (isBookmarksOpen = !isBookmarksOpen)}
+	onOpenDialog={() => (isDialogOpen = true)}
 	bookmarkCount={bookmarks.length}
 />
 
 <!-- Main Content -->
 <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-8 space-y-8">
 	<!-- Hero Intro -->
-	<section class="text-center max-w-3xl mx-auto space-y-3">
+	<section class="text-center max-w-3xl mx-auto space-y-4">
 		<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
 			<Sparkles class="w-3.5 h-3.5" /> Zero Latency Speech & Phonetics Workbench
 		</div>
@@ -291,6 +294,18 @@
 		<p class="text-slate-400 text-sm sm:text-base leading-relaxed">
 			単語をタップした瞬間に 0ms でネイティブ発音。Svelte 5 Runes が実現する仮想DOMレスの即時ハイライトと、Go + Gemini AI による音の繋がり（リエゾン）・イントネーション・構文ストリーミング解説。
 		</p>
+
+		<!-- Hero CTA -->
+		<div class="flex items-center justify-center gap-3 pt-2">
+			<button
+				onclick={() => (isDialogOpen = true)}
+				class="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-sky-500/20 transition-all hover:scale-[1.03] active:scale-95"
+			>
+				<MessageSquare class="w-4 h-4" />
+				<span>AI壁打ち対話をはじめる</span>
+				<span class="text-xs px-2 py-0.5 rounded-full bg-white/20 font-normal">習熟度レベル別</span>
+			</button>
+		</div>
 	</section>
 
 	<!-- Presets Quick Bar -->
@@ -388,6 +403,14 @@
 	{languages}
 	{selectedLang}
 	onPresetCreated={handlePresetCreated}
+/>
+
+<!-- Speaking Dialog Sparring Modal -->
+<SpeakingDialogModal
+	isOpen={isDialogOpen}
+	{selectedLang}
+	{languages}
+	onClose={() => (isDialogOpen = false)}
 />
 
 <!-- Toast Notification -->

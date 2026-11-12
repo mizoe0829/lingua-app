@@ -88,3 +88,26 @@ type AnalyzeRequest struct {
 	Word     string `json:"word,omitempty"` // Optional focused word
 }
 
+// DialogMessage represents a single message in the conversational sparring
+type DialogMessage struct {
+	Role             string `json:"role"`              // "user" or "assistant"
+	Content          string `json:"content"`           // Foreign language utterance
+	Translation      string `json:"translation"`       // Japanese translation
+	BetterPhrasing   string `json:"better_phrasing"`   // Native alternative recommendation
+	PronunciationTip string `json:"pronunciation_tip"` // Phonetic/grammar insight
+}
+
+// DialogStreamRequest is the payload for POST /api/dialog/stream
+type DialogStreamRequest struct {
+	LangCode    string          `json:"lang_code"`    // e.g. "en-US", "es-ES"
+	Level       string          `json:"level"`        // "Beginner", "Intermediate", "Advanced"
+	UserMessage string          `json:"user_message"` // Learner's current spoken utterance
+	History     []DialogMessage `json:"history"`      // Conversation context
+}
+
+// DialogStreamChunk represents parsed SSE event payload
+type DialogStreamChunk struct {
+	Type  string `json:"type"`            // "reply", "translation", "better_phrasing", "tip", "done", "error"
+	Chunk string `json:"chunk,omitempty"`
+}
+

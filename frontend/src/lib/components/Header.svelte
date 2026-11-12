@@ -1,17 +1,18 @@
 <script lang="ts">
 	import type { Language } from '$lib/types';
 	import { adminState } from '$lib/state/admin.svelte';
-	import { Bookmark, Volume2, Sparkles, Globe2, ShieldCheck, Shield } from 'lucide-svelte';
+	import { Bookmark, Volume2, Sparkles, Globe2, ShieldCheck, Shield, MessageSquare } from 'lucide-svelte';
 
 	interface Props {
 		languages: Language[];
 		selectedLang: string;
 		onSelectLang: (code: string) => void;
 		onToggleBookmarks: () => void;
+		onOpenDialog?: () => void;
 		bookmarkCount: number;
 	}
 
-	let { languages, selectedLang, onSelectLang, onToggleBookmarks, bookmarkCount }: Props = $props();
+	let { languages, selectedLang, onSelectLang, onToggleBookmarks, onOpenDialog, bookmarkCount }: Props = $props();
 
 	let currentLangObj = $derived(
 		languages.find(l => l.code === selectedLang) || { name: 'English (US)', flag: '🇺🇸' }
@@ -39,7 +40,19 @@
 		</div>
 
 		<!-- Actions & Language Selector -->
-		<div class="flex items-center gap-3">
+		<div class="flex items-center gap-2.5">
+			<!-- Dialog Sparring Button -->
+			{#if onOpenDialog}
+				<button
+					onclick={onOpenDialog}
+					class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500/20 to-indigo-500/20 hover:from-sky-500/30 hover:to-indigo-500/30 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all shadow-sm shadow-sky-500/10 hover:scale-[1.02]"
+					title="AIスピーキング壁打ちバディを開く"
+				>
+					<MessageSquare class="w-3.5 h-3.5 text-sky-400" />
+					<span>AI壁打ち</span>
+				</button>
+			{/if}
+
 			<!-- Language Dropdown -->
 			<div class="relative">
 				<label for="lang-select" class="sr-only">言語選択</label>
