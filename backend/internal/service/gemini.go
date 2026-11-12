@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -29,10 +30,28 @@ func NewGeminiService() *GeminiService {
 		modelName = "gemini-3.8-flash"
 	}
 
+	dialer := &net.Dialer{
+		Timeout:   3 * time.Second,
+		DualStack: false,
+	}
+
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// Enforce IPv4 (tcp4) to eliminate Windows dual-stack IPv6 DNS hang (speeds up from 75s to 0.3s)
+			return dialer.DialContext(ctx, "tcp4", addr)
+		},
+		TLSHandshakeTimeout:   3 * time.Second,
+		ResponseHeaderTimeout: 5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
 	return &GeminiService{
 		apiKey: apiKey,
 		model:  modelName,
-		client: &http.Client{Timeout: 60 * time.Second},
+		client: &http.Client{
+			Transport: transport,
+			Timeout:   8 * time.Second,
+		},
 	}
 }
 
@@ -421,10 +440,29 @@ func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.Dial
 	tip := ""
 
 	isRecommendation := strings.Contains(norm, "recommend") || strings.Contains(norm, "suggest") || strings.Contains(norm, "where can") || strings.Contains(norm, "any good")
+	isThirsty := hasWord(norm, "thirsty") || hasWord(norm, "drink") || hasWord(norm, "drinks") || strings.Contains(norm, "something to drink")
 
-	// 1. Food / Cafe / Dining intent (Checked first to avoid any substring overlaps)
-	if strings.Contains(norm, "coffee") || strings.Contains(norm, "cafe") || strings.Contains(norm, "croissant") || strings.Contains(norm, "restaurant") || strings.Contains(norm, "bakery") || strings.Contains(norm, "tea") || hasWord(norm, "food") || hasWord(norm, "drink") || hasWord(norm, "eat") || hasWord(norm, "lunch") || hasWord(norm, "dinner") {
-		if isRecommendation {
+	// 1. Food / Cafe / Thirsty / Dining intent (Checked first to avoid any substring overlaps)
+	if strings.Contains(norm, "coffee") || strings.Contains(norm, "cafe") || strings.Contains(norm, "croissant") || strings.Contains(norm, "restaurant") || strings.Contains(norm, "bakery") || strings.Contains(norm, "tea") || hasWord(norm, "food") || hasWord(norm, "eat") || hasWord(norm, "lunch") || hasWord(norm, "dinner") || isThirsty {
+		if isThirsty {
+			switch level {
+			case "beginner":
+				reply = "You should get a cold drink right away! Would you like an iced tea, fresh lemonade, or a cold water?"
+				trans = "すぐに冷たいものを飲んで喉を潤しましょう！アイスティー、フレッシュレモネード、それとも冷たいお水はいかがですか？"
+				better = "「That sounds nice. I'm thirsty.」に加えて「That sounds great, I could really use a cold drink right now!」と言うとさらに自然で感情が伝わります。"
+				tip = "「thirsty」の [θ] 音は舌先を上前歯の先端に軽く当てて息を抜きます。[s]（サー）にならないように意識しましょう。"
+			case "advanced":
+				reply = "There's nothing quite like a crisp, refreshing beverage when you're parched. That café has iced sparkling cold brew with lemon that is absolute perfection. Shall we head over?"
+				trans = "喉がカラカラの時に飲む爽快なドリンクに勝るものはありませんよね。あのカフェにはレモンを添えたスパークリング・コールドブリューがあって、これが絶品なんです。行ってみませんか？"
+				better = "「I'm thirsty」の上級表現として「I'm pretty parched」（喉が乾ききっている）を使うとネイティブらしいボキャブラリーになります。"
+				tip = "「parched」の [tʃt] は息を破裂させてクリアに発音し、語尾を曖昧にしないのがコツです。"
+			default:
+				reply = "Oh, you must get hydrated! That café makes fantastic iced fruit teas and sparkling sodas. What kind of drink are you craving?"
+				trans = "おや、水分補給しないといけませんね！そのカフェはアイスフルーツティーや炭酸ソーダがとても美味しいですよ。どんな飲み物を欲していますか？"
+				better = "「I'm craving a cold drink」（冷たいものが欲しくてたまらない）という表現も日常会話で非常によく使われます。"
+				tip = "「craving」は [kreɪ-vɪŋ] で、[v] は上前歯を下唇に軽く触れさせて振動させます。"
+			}
+		} else if isRecommendation {
 			switch level {
 			case "beginner":
 				reply = "There's a wonderful café called 'Green Terrace' just around the corner! Their iced latte and pastries are amazing. Would you like to check it out?"
@@ -462,8 +500,8 @@ func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.Dial
 				tip = "「For here」と「to go」の対比では、それぞれのキーワードにピッチのアクセントを置きます。"
 			}
 		}
-	} else if strings.Contains(norm, "hello") || strings.Contains(norm, "hi") || strings.Contains(norm, "morning") || strings.Contains(norm, "hola") || strings.Contains(norm, "bonjour") || strings.Contains(norm, "ciao") || strings.Contains(norm, "hallo") {
-		// 2. Greeting intent
+	} else if hasWord(norm, "hello") || hasWord(norm, "hi") || hasWord(norm, "hey") || hasWord(norm, "morning") || hasWord(norm, "hola") || hasWord(norm, "bonjour") || hasWord(norm, "ciao") || hasWord(norm, "hallo") {
+		// 2. Greeting intent (strict standalone whole word matching - never match 'hi' in 'thirsty' or 'this')
 		switch level {
 		case "beginner":
 			reply = "Hello! Great to meet you. How are you doing today?"
