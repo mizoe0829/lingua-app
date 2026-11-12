@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"net/http"
@@ -14,6 +15,35 @@ import (
 	"lingua-backend/internal/handler"
 	"lingua-backend/internal/service"
 )
+
+func loadEnvFile(paths ...string) {
+	for _, path := range paths {
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		defer f.Close()
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				v = strings.Trim(v, `"'`)
+				if os.Getenv(k) == "" {
+					os.Setenv(k, v)
+				}
+			}
+		}
+		log.Printf("[Env] Loaded environment from %s", path)
+		break
+	}
+}
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +61,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	loadEnvFile(".env", "../.env")
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8085"
