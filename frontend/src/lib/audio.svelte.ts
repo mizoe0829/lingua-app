@@ -2,10 +2,13 @@
  * Svelte 5 Runes Audio State & Controller
  * Wraps Web Speech API with zero-overhead reactive state.
  */
+import type { Sentence } from './types';
 
 export class SpeechEngine {
 	isPlaying = $state(false);
 	isPaused = $state(false);
+	isPlaylistPlaying = $state(false);
+	playlistIndex = $state(0);
 	activeSentenceId = $state<number | null>(null);
 	activeTokenId = $state<number | null>(null);
 	rate = $state(0.95);
@@ -14,6 +17,8 @@ export class SpeechEngine {
 
 	private currentUtterance: SpeechSynthesisUtterance | null = null;
 	private voices: SpeechSynthesisVoice[] = [];
+	private playlistSentences: Sentence[] = [];
+	private playlistTimeout: any = null;
 
 	constructor() {
 		if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -133,13 +138,94 @@ export class SpeechEngine {
 		window.speechSynthesis.speak(utter);
 	}
 
+	/**
+	 * Play all sentences continuously in sequence with karaoke word highlighting
+	 */
+	playAll(sentences: Sentence[], langCode: string, startIndex = 0) {
+		if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+		if (!sentences || sentences.length === 0) return;
+
+		this.stop();
+		this.isPlaylistPlaying = true;
+		this.playlistSentences = sentences;
+		this.playlistIndex = startIndex;
+
+		this.playNextSentenceInPlaylist(langCode);
+	}
+
+	private playNextSentenceInPlaylist(langCode: string) {
+		if (!this.isPlaylistPlaying) return;
+		if (this.playlistIndex >= this.playlistSentences.length) {
+			this.stop();
+			return;
+		}
+
+		const currentSentence = this.playlistSentences[this.playlistIndex];
+		this.isPlaying = true;
+		this.isPaused = false;
+		this.activeSentenceId = currentSentence.id;
+		this.activeTokenId = null;
+
+		const utter = new SpeechSynthesisUtterance(currentSentence.raw_text);
+		utter.lang = langCode;
+		utter.rate = this.rate;
+		utter.pitch = this.pitch;
+
+		const voice = this.getVoiceForLang(langCode);
+		if (voice) utter.voice = voice;
+
+		utter.onboundary = (e) => {
+			if (e.name === 'word' && currentSentence.tokens.length > 0) {
+				const charIndex = e.charIndex;
+				let accumulated = 0;
+				for (const t of currentSentence.tokens) {
+					const start = accumulated;
+					const end = accumulated + t.text.length;
+					if (charIndex >= start && charIndex <= end && t.is_word) {
+						this.activeTokenId = t.id;
+						break;
+					}
+					accumulated += t.text.length + 1;
+				}
+			}
+		};
+
+		utter.onend = () => {
+			this.activeTokenId = null;
+			if (!this.isPlaylistPlaying) return;
+
+			this.playlistIndex++;
+			if (this.playlistIndex < this.playlistSentences.length) {
+				// Natural rhythm pause between sentences (300ms)
+				this.playlistTimeout = setTimeout(() => {
+					this.playNextSentenceInPlaylist(langCode);
+				}, 300);
+			} else {
+				this.stop();
+			}
+		};
+
+		utter.onerror = () => {
+			this.stop();
+		};
+
+		this.currentUtterance = utter;
+		window.speechSynthesis.speak(utter);
+	}
+
 	stop() {
 		if (typeof window === 'undefined') return;
+		if (this.playlistTimeout) {
+			clearTimeout(this.playlistTimeout);
+			this.playlistTimeout = null;
+		}
 		window.speechSynthesis.cancel();
 		this.isPlaying = false;
 		this.isPaused = false;
+		this.isPlaylistPlaying = false;
 		this.activeSentenceId = null;
 		this.activeTokenId = null;
+		this.playlistIndex = 0;
 	}
 
 	pause() {

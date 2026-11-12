@@ -349,7 +349,7 @@
 	</section>
 
 	<!-- Audio Controller Bar -->
-	<AudioControls onStopAll={() => {}} />
+	<AudioControls {sentences} langCode={selectedLang} onStopAll={() => {}} />
 
 	<!-- Main Workbench Grid: Token Board & AI Analysis Panel -->
 	<section class="grid grid-cols-1 {activeAnalyzeSentence ? 'lg:grid-cols-12' : 'lg:grid-cols-1'} gap-6 items-start">
