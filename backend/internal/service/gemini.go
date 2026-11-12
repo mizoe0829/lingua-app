@@ -200,6 +200,8 @@ func (g *GeminiService) streamFallbackAnalysis(ctx context.Context, req model.An
 // StreamDialog handles conversational sparring with difficulty levels and translation
 func (g *GeminiService) StreamDialog(ctx context.Context, req model.DialogStreamRequest, flusher http.Flusher, w http.ResponseWriter) error {
 	if g.apiKey == "" {
+		// Log informative fallback message
+		fmt.Printf("[Dialog] GEMINI_API_KEY is not set. Using dynamic intelligent local dialog engine for: '%s'\n", req.UserMessage)
 		return g.streamFallbackDialog(ctx, req, flusher, w)
 	}
 
@@ -225,23 +227,29 @@ func (g *GeminiService) StreamDialog(ctx context.Context, req model.DialogStream
 
 	jsonBytes, err := json.Marshal(bodyData)
 	if err != nil {
+		fmt.Printf("[Dialog] Error marshaling body: %v\n", err)
 		return g.streamFallbackDialog(ctx, req, flusher, w)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBytes))
 	if err != nil {
+		fmt.Printf("[Dialog] Error creating request: %v\n", err)
 		return g.streamFallbackDialog(ctx, req, flusher, w)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := g.client.Do(httpReq)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		if resp != nil {
-			resp.Body.Close()
-		}
+	if err != nil {
+		fmt.Printf("[Dialog] Network/API error: %v. Falling back to local engine.\n", err)
 		return g.streamFallbackDialog(ctx, req, flusher, w)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		fmt.Printf("[Dialog] Gemini API responded with status %d: %s. Falling back to local engine.\n", resp.StatusCode, string(respBody))
+		return g.streamFallbackDialog(ctx, req, flusher, w)
+	}
 
 	reader := bufio.NewReader(resp.Body)
 	currentSection := "reply"
@@ -377,23 +385,117 @@ func (g *GeminiService) buildDialogPrompt(req model.DialogStreamRequest) string 
 }
 
 func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.DialogStreamRequest, flusher http.Flusher, w http.ResponseWriter) error {
-	reply := fmt.Sprintf("That sounds really interesting! Could you tell me more about what you like about it?")
-	trans := fmt.Sprintf("それはとても興味深いですね！それのどんなところが好きなのか、もっと詳しく教えてもらえますか？")
-	better := fmt.Sprintf("「%s」は通じますが、ネイティブなら「I'd like to talk about...」や「In my experience...」と切り出すとより自然です。", req.UserMessage)
-	tip := fmt.Sprintf("文頭の単語にピッチの山を置き、文末に向かって少し息を抜きながら音を下げると英語らしいイントネーションになります。")
+	lower := strings.ToLower(req.UserMessage)
+	level := strings.ToLower(req.Level)
 
+	reply := ""
+	trans := ""
+	better := ""
+	tip := ""
+
+	// 1. Greeting intent
+	if strings.Contains(lower, "hello") || strings.Contains(lower, "hi") || strings.Contains(lower, "morning") || strings.Contains(lower, "hola") || strings.Contains(lower, "bonjour") || strings.Contains(lower, "ciao") || strings.Contains(lower, "hallo") {
+		switch level {
+		case "beginner":
+			reply = "Hello! Great to meet you. How are you doing today?"
+			trans = "こんにちは！お会いできて嬉しいです。今日の調子はいかがですか？"
+			better = "「Hi there!」や「Good morning!」と明るくピッチを上げて言うと、ネイティブにとても親しみやすい印象を与えます。"
+			tip = "英語の挨拶は語尾の音を軽くキュッと上げると（Up-gliding）、フレンドリーで聞き取りやすくなります。"
+		case "advanced":
+			reply = "Hey, good to see you! How has your week been treating you so far?"
+			trans = "やあ、会えて嬉しいよ！今週の調子はどう？順調に進んでる？"
+			better = "親しい同僚や友人には「How's everything going?」や「What's new?」とフランクに切り出すのが一般的です。"
+			tip = "「treating you」の部分は [t] がリエゾンして滑らかに流れるように発音するとネイティブらしいです。"
+		default: // intermediate
+			reply = "Hello there! Nice to talk to you. What are you up to today?"
+			trans = "こんにちは！お話しできて光栄です。今日はどんな予定があるんですか？"
+			better = "「Nice to meet you」は初対面、「Nice to see you」は再会時に使い分けると自然です。"
+			tip = "「What are you up to」は [wʌt-ər-ju-ʌp-tə] とひと繋がりのリズムで一気に発声しましょう。"
+		}
+	} else if strings.Contains(lower, "coffee") || strings.Contains(lower, "cafe") || strings.Contains(lower, "order") || strings.Contains(lower, "croissant") || strings.Contains(lower, "food") || strings.Contains(lower, "eat") || strings.Contains(lower, "restaurant") {
+		// 2. Ordering / Food / Cafe intent
+		switch level {
+		case "beginner":
+			reply = "Sure! We have hot coffee and iced latte. Which size would you like?"
+			trans = "かしこまりました！ホットコーヒーとアイスラテがございます。サイズはどちらになさいますか？"
+			better = "注文時は「I want...」よりも「Could I have a coffee, please?」と頼むと大変丁寧です。"
+			tip = "「Which size would you like」の文末は、選択肢を問う疑問文なので音を下げて発音します。"
+		case "advanced":
+			reply = "Certainly! Today's single-origin batch brew features floral Ethiopian beans. Would you care for whole milk, or a plant-based alternative like oat or almond?"
+			trans = "かしこまりました！本日のシングルオリジンは華やかなエチオピア産です。牛乳になさいますか？それともオーツやアーモンドなどの植物性ミルクがよろしいですか？"
+			better = "「Could I get... with an extra shot?」や「Can you make that with oat milk?」とサラッと言えると通っぽいです。"
+			tip = "「Would you care for」は非常に洗練された接客英語です。[wʊ-dʒu-kɛər-fər] と連結します。"
+		default:
+			reply = "Of course! Coming right up. For here, or to go? We also have fresh pastries on the counter today."
+			trans = "もちろん！すぐにお作りしますね。店内ですか、それともお持ち帰りですか？カウンターには焼きたてのペストリーもありますよ。"
+			better = "「For here or to go?」（店内か持ち帰りか）は海外カフェの頻出フレーズです。「To go, please!」と即答できるようにしましょう。"
+			tip = "「For here」と「to go」の対比では、それぞれのキーワードにピッチのアクセントを置きます。"
+		}
+	} else if strings.Contains(lower, "code") || strings.Contains(lower, "work") || strings.Contains(lower, "service") || strings.Contains(lower, "go") || strings.Contains(lower, "svelte") || strings.Contains(lower, "architecture") || strings.Contains(lower, "database") || strings.Contains(lower, "refactor") {
+		// 3. Tech / Engineering intent
+		switch level {
+		case "beginner":
+			reply = "Programming is awesome! What kind of software are you building right now?"
+			trans = "プログラミングは素晴らしいですね！今はどんなソフトウェアを作っているのですか？"
+			better = "「I am writing code」よりも「I'm working on a web app」や「I build backend services」と表現すると自然です。"
+			tip = "「building」の [l] 音は舌先を上前歯の付け根にしっかり押し当てて響かせます。"
+		case "advanced":
+			reply = "Decoupling distributed microservices is always a tricky trade-off between latency and data consistency. How are you managing state sync across nodes?"
+			trans = "分散マイクロサービスの疎結合化は、常に低遅延とデータ整合性のトレードオフが悩ましいですよね。ノード間の状態同期はどう対処されていますか？"
+			better = "技術ディスカッションでは「We decided to adopt... because of...」と選定理由を明示すると説得力が増します。"
+			tip = "「microservices」や「consistency」などの多音節テクニカル用語は、第1・第2ストレスの位置を意識してハキハキ発声します。"
+		default:
+			reply = "That sounds like a fascinating project! Are you focusing on backend performance or frontend reactivity?"
+			trans = "とても面白そうなプロジェクトですね！バックエンドのパフォーマンスとフロントエンドのリアクティビティ、どちらに重点を置いていますか？"
+			better = "「I like Go」だけでなく「Go's concurrency model really helps reduce latency」のように理由を添えてみましょう。"
+			tip = "「backend performance」と語句が続くときは、単語と単語の間に余計な母音 [u] を挟まないように注意します。"
+		}
+	} else if strings.Contains(lower, "learn") || strings.Contains(lower, "english") || strings.Contains(lower, "fluency") || strings.Contains(lower, "speak") || strings.Contains(lower, "pronunciation") {
+		// 4. Language learning intent
+		reply = "Consistency is definitely the secret! Practicing out loud for even five minutes a day dramatically builds muscle memory. What part of speaking feels most challenging for you?"
+		trans = "継続こそが最大の秘訣です！1日5分でも声に出して練習することで、口周りの筋肉の記憶が劇的に養われます。スピーキングのどの部分が一番難しく感じますか？"
+		better = "「I want to be good at English」よりも「I'm aiming to speak more fluently and confidently」と表現すると具体的でスマートです。"
+		tip = "「muscle memory」は [mʌsl-mɛməri] と発音し、'c' は発音しません（無音のc）。"
+	} else if strings.HasSuffix(strings.TrimSpace(lower), "?") {
+		// 5. User asked a question
+		reply = "That's an excellent question! In my view, it really depends on the context and what you want to prioritize. What do you personally think is the most important factor?"
+		trans = "素晴らしい質問ですね！私の考えでは、状況や何を最優先したいかによって大きく変わってきます。あなたご自身はどの要素が一番重要だと思いますか？"
+		better = "質問された後に「That's a good question! Let me think...」と相槌を打つと、ネイティブらしい自然な会話の間が作れます。"
+		tip = "「depends on」は [dɪ-pɛnd-zɑn] と完全に音が繋がってひとつの単語のようになります（リンキング）。"
+	} else {
+		// 6. General conversational progression
+		switch level {
+		case "beginner":
+			reply = "I see! That sounds nice. Could you tell me a little bit more about that?"
+			trans = "なるほど！良さそうですね。それについてもう少しだけ教えてもらえますか？"
+			better = "相槌を打つときは「Yeah」だけでなく「I see!」「That makes sense!」を混ぜると表現力がアップします。"
+			tip = "「a little bit」は [ə-lɪtl-bɪt] と発音し、アメリカ英語では 'tt' が軽い弾き音（ラ行に近い音）になります。"
+		case "advanced":
+			reply = "That's a very compelling point. It opens up quite a few interesting possibilities. Where do you see this heading in the near future?"
+			trans = "とても説得力のある視点ですね。興味深い可能性がいくつも広がりそうです。近い将来、これはどう進展していくとお考えですか？"
+			better = "「I think so too」の代わりに「I completely share that perspective」と言うと、プロフェッショナルな議論で一目置かれます。"
+			tip = "「quite a few」は「かなり多くの」という意味のイディオムです。発音は滑らかに [kwaɪt-ə-fjuː] と繋ぎます。"
+		default:
+			reply = "That really makes sense. Thanks for sharing that perspective! What made you interested in this in the first place?"
+			trans = "とても納得がいきます。その視点を共有してくれてありがとう！そもそも、それに興味を持ったきっかけは何だったのですか？"
+			better = "自分の意見を述べるときは「To be honest...」や「From my perspective...」をクッションに置くと会話が滑らかになります。"
+			tip = "「in the first place」は「そもそも・最初に」という定番表現です。リズムよくひと息で発声しましょう。"
+		}
+	}
+
+	// Adapt for non-English languages
 	if strings.HasPrefix(req.LangCode, "es") {
-		reply = "¡Qué interesante! ¿Podrías contarme un poco más sobre eso?"
-		trans = "とても面白いですね！それについてもう少し話してくれますか？"
+		reply = "¡Qué interesante! Me encanta tu punto de vista. ¿Podrías contarme un poco más sobre eso?"
+		trans = "とても面白いですね！あなたの視点がとても気に入りました。それについてもう少し詳しく話してくれますか？"
 	} else if strings.HasPrefix(req.LangCode, "fr") {
-		reply = "C'est très intéressant ! Pourriez-vous m'en dire plus à ce sujet ?"
-		trans = "それはとても興味深いですね！そのことについてもっと話していただけますか？"
+		reply = "C'est vraiment passionnant ! Je comprends tout à fait. Pourriez-vous m'en dire un peu plus à ce sujet ?"
+		trans = "本当に魅力的ですね！とてもよく分かります。そのことについてもう少し詳しく話していただけますか？"
 	} else if strings.HasPrefix(req.LangCode, "de") {
-		reply = "Das klingt sehr interessant! Könnten Sie mir mehr darüber erzählen?"
-		trans = "それはとても面白そうですね！それについてもっと詳しく教えていただけますか？"
+		reply = "Das ist ein sehr interessanter Gedanke! Könnten Sie mir bitte noch etwas mehr darüber berichten?"
+		trans = "それはとても興味深い考えですね！それについてもう少し詳しく教えていただけますか？"
 	} else if strings.HasPrefix(req.LangCode, "it") {
-		reply = "Molto interessante! Mi potresti dire qualcosa in più al riguardo?"
-		trans = "とても面白いですね！それについてもう少し教えてもらえますか？"
+		reply = "Che bella idea! Mi piace molto il tuo punto di vista. Mi potresti raccontare qualcosa in più?"
+		trans = "素敵なアイデアですね！あなたの視点はとても素晴らしいです。もう少し詳しく聞かせてもらえますか？"
 	}
 
 	sections := []struct {
@@ -414,7 +516,7 @@ func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.Dial
 			default:
 			}
 			g.sendDialogChunk(w, flusher, s.sec, wStr+" ")
-			time.Sleep(25 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 		}
 	}
 
