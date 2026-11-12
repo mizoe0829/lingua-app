@@ -51,7 +51,7 @@ func (s *TokenizerService) Tokenize(langCode, text string) (*model.TokenizeRespo
 		}
 	}
 
-	for sIdx, raw := range rawMatches {
+	for _, raw := range rawMatches {
 		trimmed := strings.TrimSpace(raw)
 		if trimmed == "" {
 			continue
@@ -66,7 +66,7 @@ func (s *TokenizerService) Tokenize(langCode, text string) (*model.TokenizeRespo
 		}
 
 		sentences = append(sentences, model.Sentence{
-			ID:      sIdx + 1,
+			ID:      len(sentences) + 1,
 			RawText: trimmed,
 			Tokens:  tokens,
 		})
