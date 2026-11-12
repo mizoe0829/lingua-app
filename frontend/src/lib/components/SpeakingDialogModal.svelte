@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DialogMessage, ProficiencyLevel, Language } from '$lib/types';
-	import { speechEngine } from '$lib/audio.svelte';
-	import { X, Mic, Send, Volume2, Sparkles, MessageSquare, Bot, User, Gauge, Lightbulb, CheckCircle2, RotateCcw } from 'lucide-svelte';
+	import { speechEngine, speechRecognizer } from '$lib/audio.svelte';
+	import { X, Mic, MicOff, Send, Volume2, Sparkles, MessageSquare, Bot, User, Gauge, Lightbulb, CheckCircle2, RotateCcw } from 'lucide-svelte';
 
 	interface Props {
 		isOpen: boolean;
@@ -56,6 +56,9 @@
 	let currentStarters = $derived(starters[selectedLang] || starters['en-US']);
 
 	async function handleSendMessage(textToSend?: string) {
+		if (speechRecognizer.isListening) {
+			speechRecognizer.stop();
+		}
 		const text = (textToSend || userInput).trim();
 		if (!text || isStreaming) return;
 
@@ -181,7 +184,24 @@
 	function handleClearChat() {
 		messages = [];
 		if (abortController) abortController.abort();
+		if (speechRecognizer.isListening) speechRecognizer.stop();
 		isStreaming = false;
+	}
+
+	function handleSafeClose() {
+		if (speechRecognizer.isListening) speechRecognizer.stop();
+		if (abortController) abortController.abort();
+		onClose();
+	}
+
+	function toggleMic() {
+		if (speechRecognizer.isListening) {
+			speechRecognizer.stop();
+		} else {
+			speechRecognizer.start(selectedLang, (text, isFinal) => {
+				userInput = text;
+			});
+		}
 	}
 </script>
 
@@ -191,8 +211,8 @@
 		tabindex="0"
 		role="button"
 		class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in"
-		onclick={onClose}
-		onkeydown={(e) => e.key === 'Escape' && onClose()}
+		onclick={handleSafeClose}
+		onkeydown={(e) => e.key === 'Escape' && handleSafeClose()}
 	>
 		<!-- Modal Box -->
 		<div
@@ -248,7 +268,7 @@
 
 					<!-- Close -->
 					<button
-						onclick={onClose}
+						onclick={handleSafeClose}
 						class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
 					>
 						<X class="w-5 h-5" />
@@ -398,7 +418,41 @@
 
 			<!-- Input Area -->
 			<div class="p-4 bg-slate-950/80 border-t border-slate-800 space-y-2">
+				{#if speechRecognizer.isListening}
+					<div class="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs animate-in fade-in">
+						<div class="flex items-center gap-2">
+							<span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+							<span><strong>{currentLangObj.name}</strong> 音声を聴き取っています...（話し終わったらもう一度マイクを押すか送信してください）</span>
+						</div>
+						<button type="button" onclick={toggleMic} class="text-rose-300 hover:text-white underline font-semibold px-2 py-0.5 rounded-lg bg-rose-500/20">完了</button>
+					</div>
+				{/if}
+
+				{#if speechRecognizer.errorMessage}
+					<div class="px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+						<span>{speechRecognizer.errorMessage}</span>
+						<button type="button" onclick={() => { speechRecognizer.errorMessage = null; }} class="text-amber-400 hover:text-white ml-2">×</button>
+					</div>
+				{/if}
+
 				<form onsubmit={(e) => { e.preventDefault(); handleSendMessage(); }} class="flex items-center gap-2">
+					<!-- Realtime Mic Button -->
+					<button
+						type="button"
+						onclick={toggleMic}
+						disabled={isStreaming}
+						class="p-3 rounded-2xl font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-40 flex items-center gap-1.5 shadow-lg {speechRecognizer.isListening ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse shadow-rose-600/40 ring-4 ring-rose-500/20' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'}"
+						title={speechRecognizer.isListening ? '音声入力を終了' : 'マイクで話しかける（Web Speech API）'}
+					>
+						{#if speechRecognizer.isListening}
+							<Mic class="w-4 h-4 text-white animate-bounce" />
+							<span class="text-xs hidden sm:inline font-bold">聴取中</span>
+						{:else}
+							<Mic class="w-4 h-4 text-sky-400" />
+							<span class="text-xs hidden sm:inline">音声入力</span>
+						{/if}
+					</button>
+
 					<input
 						type="text"
 						bind:value={userInput}
@@ -417,7 +471,7 @@
 					</button>
 				</form>
 				<p class="text-[11px] text-center text-slate-500">
-					※ 次のステップでマイク長押しによるリアルタイム音声認識（STT）とピッチ波形比較が追加されます。
+					※ マイクボタンを押すとリアルタイム音声認識（STT）が起動し、話した内容が入力欄へ自動転記されます。
 				</p>
 			</div>
 		</div>
