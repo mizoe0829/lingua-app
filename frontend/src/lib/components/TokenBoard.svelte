@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Sentence, Token } from '$lib/types';
 	import { speechEngine } from '$lib/audio.svelte';
-	import { Volume2, Sparkles, BookmarkPlus, Info } from 'lucide-svelte';
+	import { Volume2, Sparkles, BookmarkPlus, Info, Activity } from 'lucide-svelte';
+	import PitchVisualizer from './PitchVisualizer.svelte';
 
 	interface Props {
 		sentences: Sentence[];
@@ -14,6 +15,7 @@
 
 	// Hovered token state for rich preview
 	let hoveredToken = $state<Token | null>(null);
+	let activePitchSentenceId = $state<number | null>(null);
 
 	function handleWordClick(token: Token) {
 		if (!token.is_word) return;
@@ -58,6 +60,16 @@
 					>
 						<Sparkles class="w-3.5 h-3.5 text-sky-400" />
 						<span>AI発音・構文解説</span>
+					</button>
+
+					<!-- Pitch Contour Button -->
+					<button
+						onclick={() => (activePitchSentenceId = activePitchSentenceId === sentence.id ? null : sentence.id)}
+						class="flex items-center gap-1.5 px-3 py-1 rounded-lg transition-all hover:scale-[1.02] text-xs font-medium {activePitchSentenceId === sentence.id ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20' : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300/80 hover:text-amber-200 border border-amber-500/20'}"
+						title="ネイティブのお手本イントネーション曲線と、自分のマイク発声ピッチをリアルタイム比較"
+					>
+						<Activity class="w-3.5 h-3.5 text-amber-400" />
+						<span>ピッチ波形比較</span>
 					</button>
 				</div>
 			</div>
@@ -155,6 +167,15 @@
 					{/if}
 				{/each}
 			</div>
+
+			<!-- Pitch Contour Visualizer for this sentence -->
+			{#if activePitchSentenceId === sentence.id}
+				<PitchVisualizer
+					{sentence}
+					{langCode}
+					onClose={() => (activePitchSentenceId = null)}
+				/>
+			{/if}
 		</div>
 	{/each}
 </div>
