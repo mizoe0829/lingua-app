@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"lingua-backend/internal/model"
 )
@@ -24,8 +25,8 @@ type GeminiService struct {
 func NewGeminiService() *GeminiService {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	modelName := os.Getenv("GEMINI_MODEL")
-	if modelName == "" {
-		modelName = "gemini-2.5-flash"
+	if modelName == "" || modelName == "gemini-2.5-flash" {
+		modelName = "gemini-3.8-flash"
 	}
 
 	return &GeminiService{
@@ -384,8 +385,34 @@ func (g *GeminiService) buildDialogPrompt(req model.DialogStreamRequest) string 
 `, req.LangCode, req.Level, levelGuide, historyStr, req.UserMessage, req.UserMessage)
 }
 
+func normalizeText(s string) string {
+	lower := strings.ToLower(s)
+	// Normalize common accented vowels (e.g. café -> cafe)
+	replacer := strings.NewReplacer(
+		"é", "e", "è", "e", "ê", "e", "ë", "e",
+		"á", "a", "à", "a", "â", "a", "ä", "a",
+		"í", "i", "ì", "i", "î", "i", "ï", "i",
+		"ó", "o", "ò", "o", "ô", "o", "ö", "o",
+		"ú", "u", "ù", "u", "û", "u", "ü", "u",
+		"ñ", "n", "ç", "c",
+	)
+	return replacer.Replace(lower)
+}
+
+func hasWord(s, target string) bool {
+	words := strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	})
+	for _, w := range words {
+		if strings.EqualFold(w, target) {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.DialogStreamRequest, flusher http.Flusher, w http.ResponseWriter) error {
-	lower := strings.ToLower(req.UserMessage)
+	norm := normalizeText(req.UserMessage)
 	level := strings.ToLower(req.Level)
 
 	reply := ""
@@ -393,8 +420,50 @@ func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.Dial
 	better := ""
 	tip := ""
 
-	// 1. Greeting intent
-	if strings.Contains(lower, "hello") || strings.Contains(lower, "hi") || strings.Contains(lower, "morning") || strings.Contains(lower, "hola") || strings.Contains(lower, "bonjour") || strings.Contains(lower, "ciao") || strings.Contains(lower, "hallo") {
+	isRecommendation := strings.Contains(norm, "recommend") || strings.Contains(norm, "suggest") || strings.Contains(norm, "where can") || strings.Contains(norm, "any good")
+
+	// 1. Food / Cafe / Dining intent (Checked first to avoid any substring overlaps)
+	if strings.Contains(norm, "coffee") || strings.Contains(norm, "cafe") || strings.Contains(norm, "croissant") || strings.Contains(norm, "restaurant") || strings.Contains(norm, "bakery") || strings.Contains(norm, "tea") || hasWord(norm, "food") || hasWord(norm, "drink") || hasWord(norm, "eat") || hasWord(norm, "lunch") || hasWord(norm, "dinner") {
+		if isRecommendation {
+			switch level {
+			case "beginner":
+				reply = "There's a wonderful café called 'Green Terrace' just around the corner! Their iced latte and pastries are amazing. Would you like to check it out?"
+				trans = "すぐ角を曲がったところに『グリーン・テラス』という素敵なカフェがありますよ！アイスラテとペストリーが絶品です。行ってみますか？"
+				better = "「Could you recommend a good café?」の他にも「Do you know any nice cafés nearby?」と聞くとフレンドリーで自然です。"
+				tip = "「café」は [kæˈfeɪ] と語尾の母音 [eɪ] にピッチを上げ気味にアクセントを置きます。"
+			case "advanced":
+				reply = "If you're into specialty coffee, you should definitely check out 'The Roasted Bean' two blocks away. They do incredible single-origin pourovers and the atmosphere is quite serene. Are you looking to grab a quick cup or sit down to work?"
+				trans = "スペシャルティコーヒーがお好きなら、2ブロック先の『The Roasted Bean』が断然おすすめです。素晴らしいシングルオリジンのハンドドリップが楽しめ、雰囲気もとても落ち着いていますよ。テイクアウトですか、それともゆっくり作業されますか？"
+				better = "「Are there any local hidden gems for coffee?」のように「hidden gems」（隠れた名店）を使うと洗練された表現になります。"
+				tip = "「two blocks away」の [ks-ə] はリエゾン（音の連結）を意識して [tʰuː blɑksəweɪ] と滑らかに繋げましょう。"
+			default: // intermediate
+				reply = "I'd love to! There's a cozy café called 'Artisan Brew' about five minutes walk from here. They have great roasted coffee and free Wi-Fi. Do you prefer espresso drinks or drip coffee?"
+				trans = "喜んで！ここから徒歩5分ほどの場所に『Artisan Brew』という居心地の良いカフェがありますよ。焙煎コーヒーが美味しくWi-Fiも使えます。エスプレッソ系とドリップコーヒー、どちらがお好みですか？"
+				better = "「Can you suggest a good place for coffee?」や「What's your favorite café around here?」も非常によく使われる自然な表現です。"
+				tip = "「about five minutes walk」は [ə-baʊt faɪv mɪnɪts wɔːk] と一息のリズムで流れるように発音します。"
+			}
+		} else {
+			// Ordering or general café talk
+			switch level {
+			case "beginner":
+				reply = "Sure! We have hot coffee, iced latte, and fresh tea. Which size would you like?"
+				trans = "かしこまりました！ホットコーヒー、アイスラテ、淹れたてのお茶がございます。サイズはどちらになさいますか？"
+				better = "注文時は「I want...」よりも「Could I have a coffee, please?」と頼むと大変丁寧です。"
+				tip = "「Which size would you like」の文末は、選択肢を問う疑問文なので音を下げて発音します。"
+			case "advanced":
+				reply = "Certainly! Today's single-origin batch brew features floral Ethiopian beans with notes of jasmine and citrus. Would you care for whole milk, or a plant-based alternative?"
+				trans = "かしこまりました！本日のシングルオリジンはジャスミンと柑橘の香るエチオピア産です。牛乳になさいますか？それとも植物性ミルクがよろしいですか？"
+				better = "「Could I get that with an extra shot?」や「Can you make that with oat milk?」とサラッと言えると通っぽいです。"
+				tip = "「Would you care for」は非常に洗練された接客英語です。[wʊ-dʒu-kɛər-fər] と連結します。"
+			default:
+				reply = "Of course! Coming right up. For here, or to go? We also have fresh pastries on the counter today."
+				trans = "もちろん！すぐにお作りしますね。店内ですか、それともお持ち帰りですか？カウンターには焼きたてのペストリーもありますよ。"
+				better = "「For here or to go?」（店内か持ち帰りか）は海外カフェの頻出フレーズです。「To go, please!」と即答できるようにしましょう。"
+				tip = "「For here」と「to go」の対比では、それぞれのキーワードにピッチのアクセントを置きます。"
+			}
+		}
+	} else if strings.Contains(norm, "hello") || strings.Contains(norm, "hi") || strings.Contains(norm, "morning") || strings.Contains(norm, "hola") || strings.Contains(norm, "bonjour") || strings.Contains(norm, "ciao") || strings.Contains(norm, "hallo") {
+		// 2. Greeting intent
 		switch level {
 		case "beginner":
 			reply = "Hello! Great to meet you. How are you doing today?"
@@ -412,27 +481,8 @@ func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.Dial
 			better = "「Nice to meet you」は初対面、「Nice to see you」は再会時に使い分けると自然です。"
 			tip = "「What are you up to」は [wʌt-ər-ju-ʌp-tə] とひと繋がりのリズムで一気に発声しましょう。"
 		}
-	} else if strings.Contains(lower, "coffee") || strings.Contains(lower, "cafe") || strings.Contains(lower, "order") || strings.Contains(lower, "croissant") || strings.Contains(lower, "food") || strings.Contains(lower, "eat") || strings.Contains(lower, "restaurant") {
-		// 2. Ordering / Food / Cafe intent
-		switch level {
-		case "beginner":
-			reply = "Sure! We have hot coffee and iced latte. Which size would you like?"
-			trans = "かしこまりました！ホットコーヒーとアイスラテがございます。サイズはどちらになさいますか？"
-			better = "注文時は「I want...」よりも「Could I have a coffee, please?」と頼むと大変丁寧です。"
-			tip = "「Which size would you like」の文末は、選択肢を問う疑問文なので音を下げて発音します。"
-		case "advanced":
-			reply = "Certainly! Today's single-origin batch brew features floral Ethiopian beans. Would you care for whole milk, or a plant-based alternative like oat or almond?"
-			trans = "かしこまりました！本日のシングルオリジンは華やかなエチオピア産です。牛乳になさいますか？それともオーツやアーモンドなどの植物性ミルクがよろしいですか？"
-			better = "「Could I get... with an extra shot?」や「Can you make that with oat milk?」とサラッと言えると通っぽいです。"
-			tip = "「Would you care for」は非常に洗練された接客英語です。[wʊ-dʒu-kɛər-fər] と連結します。"
-		default:
-			reply = "Of course! Coming right up. For here, or to go? We also have fresh pastries on the counter today."
-			trans = "もちろん！すぐにお作りしますね。店内ですか、それともお持ち帰りですか？カウンターには焼きたてのペストリーもありますよ。"
-			better = "「For here or to go?」（店内か持ち帰りか）は海外カフェの頻出フレーズです。「To go, please!」と即答できるようにしましょう。"
-			tip = "「For here」と「to go」の対比では、それぞれのキーワードにピッチのアクセントを置きます。"
-		}
-	} else if strings.Contains(lower, "code") || strings.Contains(lower, "work") || strings.Contains(lower, "service") || strings.Contains(lower, "go") || strings.Contains(lower, "svelte") || strings.Contains(lower, "architecture") || strings.Contains(lower, "database") || strings.Contains(lower, "refactor") {
-		// 3. Tech / Engineering intent
+	} else if hasWord(norm, "code") || hasWord(norm, "coding") || hasWord(norm, "programming") || hasWord(norm, "software") || hasWord(norm, "golang") || (hasWord(norm, "go") && (hasWord(norm, "lang") || hasWord(norm, "concurrency") || hasWord(norm, "routine"))) || hasWord(norm, "svelte") || hasWord(norm, "database") || hasWord(norm, "api") || hasWord(norm, "refactor") {
+		// 3. Tech / Engineering intent (strict whole-word matching, never matching substring 'go' in 'good')
 		switch level {
 		case "beginner":
 			reply = "Programming is awesome! What kind of software are you building right now?"
@@ -450,16 +500,16 @@ func (g *GeminiService) streamFallbackDialog(ctx context.Context, req model.Dial
 			better = "「I like Go」だけでなく「Go's concurrency model really helps reduce latency」のように理由を添えてみましょう。"
 			tip = "「backend performance」と語句が続くときは、単語と単語の間に余計な母音 [u] を挟まないように注意します。"
 		}
-	} else if strings.Contains(lower, "learn") || strings.Contains(lower, "english") || strings.Contains(lower, "fluency") || strings.Contains(lower, "speak") || strings.Contains(lower, "pronunciation") {
+	} else if strings.Contains(norm, "learn") || strings.Contains(norm, "english") || strings.Contains(norm, "fluency") || strings.Contains(norm, "speak") || strings.Contains(norm, "pronunciation") {
 		// 4. Language learning intent
 		reply = "Consistency is definitely the secret! Practicing out loud for even five minutes a day dramatically builds muscle memory. What part of speaking feels most challenging for you?"
 		trans = "継続こそが最大の秘訣です！1日5分でも声に出して練習することで、口周りの筋肉の記憶が劇的に養われます。スピーキングのどの部分が一番難しく感じますか？"
 		better = "「I want to be good at English」よりも「I'm aiming to speak more fluently and confidently」と表現すると具体的でスマートです。"
 		tip = "「muscle memory」は [mʌsl-mɛməri] と発音し、'c' は発音しません（無音のc）。"
-	} else if strings.HasSuffix(strings.TrimSpace(lower), "?") {
-		// 5. User asked a question
-		reply = "That's an excellent question! In my view, it really depends on the context and what you want to prioritize. What do you personally think is the most important factor?"
-		trans = "素晴らしい質問ですね！私の考えでは、状況や何を最優先したいかによって大きく変わってきます。あなたご自身はどの要素が一番重要だと思いますか？"
+	} else if strings.HasSuffix(strings.TrimSpace(norm), "?") {
+		// 5. User asked a general question
+		reply = "That's an excellent question! In my view, it really depends on the situation and what you value most. What do you personally think is the most important factor?"
+		trans = "素晴らしい質問ですね！私の考えでは、状況や何を一番重視するかによって大きく変わってきます。あなたご自身はどの要素が一番重要だと思いますか？"
 		better = "質問された後に「That's a good question! Let me think...」と相槌を打つと、ネイティブらしい自然な会話の間が作れます。"
 		tip = "「depends on」は [dɪ-pɛnd-zɑn] と完全に音が繋がってひとつの単語のようになります（リンキング）。"
 	} else {
